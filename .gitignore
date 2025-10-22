@@ -18,6 +18,7 @@
 /public/storage
 /storage/*.key
 /storage/pail
+/storage/qr_codes
 /vendor
 /public/qr_codes
 Homestead.json

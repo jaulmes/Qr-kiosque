@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Maatwebsite\Excel\Facades\Excel;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use Illuminate\Support\Str;
 
 class UploadController extends Controller
 {
@@ -230,12 +231,12 @@ private function cleanPhone($phone)
 private function generateQRCode($superAgentName, $distribName, $kiosqueName, $kiosqueCode)
 {
     // Nettoyer les noms pour les chemins de fichiers
-    $superAgentName = $this->sanitizeFileName($superAgentName);
-    $distribName = $this->sanitizeFileName($distribName);
-    $kiosqueName = $this->sanitizeFileName($kiosqueName);
+    $superAgentName = Str::slug($superAgentName);
+    $distribName = Str::slug($distribName);
+    $kiosqueName = Str::slug($kiosqueName);
     
     // Créer le dossier si nécessaire
-    $folderPath = storage_path("qr_codes/{$superAgentName}/{$distribName}");
+    $folderPath = public_path("qr_codes/{$superAgentName}/{$distribName}");
     if (!File::exists($folderPath)) {
         File::makeDirectory($folderPath, 0755, true);
     }
@@ -269,23 +270,7 @@ private function generateQRCode($superAgentName, $distribName, $kiosqueName, $ki
     }
 }
 
-/**
- * Nettoie un nom de fichier pour le système de fichiers
- */
-private function sanitizeFileName($name)
-{
-    // Remplace les caractères spéciaux par des underscores
-    $name = preg_replace('/[^A-Za-z0-9\-_\s]/', '_', $name);
-    // Remplace les espaces par des underscores
-    $name = str_replace(' ', '_', $name);
-    // Supprime les underscores multiples
-    $name = preg_replace('/_+/', '_', $name);
-    // Supprime les underscores au début et à la fin
-    $name = trim($name, '_');
-    
-    // Si le nom est vide après nettoyage, utiliser un nom par défaut
-    return empty($name) ? 'unnamed' : $name;
-}
+
 
 /**
  * Formate le message final d'importation
