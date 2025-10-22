@@ -235,7 +235,7 @@ private function generateQRCode($superAgentName, $distribName, $kiosqueName, $ki
     $kiosqueName = $this->sanitizeFileName($kiosqueName);
     
     // Créer le dossier si nécessaire
-    $folderPath = public_path("qr_codes/{$superAgentName}/{$distribName}");
+    $folderPath = storage_path("qr_codes/{$superAgentName}/{$distribName}");
     if (!File::exists($folderPath)) {
         File::makeDirectory($folderPath, 0755, true);
     }
