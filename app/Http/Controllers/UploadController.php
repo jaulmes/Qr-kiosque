@@ -34,7 +34,7 @@ public function upload(Request $request)
     try {
         // Lecture du fichier Excel
         $path = $request->file('file')->getRealPath();
-        $data = Excel::toArray([], $path);
+        $data = Excel::toArray([], $request->file('file'));
         
         // Vérification que le fichier contient des données
         if (empty($data) || empty($data[0])) {
