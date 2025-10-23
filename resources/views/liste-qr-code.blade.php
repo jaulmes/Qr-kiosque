@@ -88,11 +88,11 @@
                                                         <div class="row g-3">
                                                             @foreach ($dist->kiosques as $k)
                                                                 @php
-    $safeSa = \Illuminate\Support\Str::slug($sa->name, '_');
-    $safeDist = \Illuminate\Support\Str::slug($dist->name, '_');
-    $safeKio = \Illuminate\Support\Str::slug($k->name, '_');
-    $svgPath = asset("qr_codes/{$safeSa}/{$safeDist}/{$safeKio}.svg");
-    $pngPath = asset("qr_codes/{$safeSa}/{$safeDist}/{$safeKio}.png");
+                                                                    $safeSa = \Illuminate\Support\Str::slug($sa->name, '_');
+                                                                    $safeDist = \Illuminate\Support\Str::slug($dist->name, '_');
+                                                                    $safeKio = \Illuminate\Support\Str::slug($k->name, '_');
+                                                                    $svgPath = asset("qr_codes/{$safeSa}/{$safeDist}/{$safeKio}.svg");
+                                                                    $pngPath = asset("qr_codes/{$safeSa}/{$safeDist}/{$safeKio}.png");
                                                                 @endphp
 
                                                                 <div class="col-md-6 col-lg-4">
