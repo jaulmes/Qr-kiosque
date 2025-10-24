@@ -8,6 +8,9 @@
             <p class="text-muted mb-0">Super Agent → Distributeur → Kiosque</p>
         </div>
         <div>
+            <a href="{{ route('download.all.qr') }}" class="btn btn-success btn-sm" id="downloadAllBtn">
+                <i class="bi bi-download"></i> Télécharger tout (ZIP)
+            </a>
             <button class="btn btn-outline-primary btn-sm me-2" onclick="expandAll()">
                 <i class="bi bi-arrows-expand"></i> Tout ouvrir
             </button>
@@ -196,6 +199,18 @@
     justify-content: center;
 }
 </style>
+
+<script>
+document.getElementById('downloadAllBtn').addEventListener('click', function() {
+    const btn = this;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Préparation en cours...';
+    btn.classList.add('disabled');
+    setTimeout(() => {
+        btn.innerHTML = '<i class="bi bi-download"></i> Télécharger tout (ZIP)';
+        btn.classList.remove('disabled');
+    }, 8000);
+});
+</script>
 
 <script>
 const qrModal = new bootstrap.Modal(document.getElementById('qrModal'));

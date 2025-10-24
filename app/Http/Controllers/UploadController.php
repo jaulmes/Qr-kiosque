@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Jobs\ImportKiosquesJob;
 use App\Models\Distributeur;
+use App\Models\JobProgress;
 use App\Models\Kiosque;
 use App\Models\Super_agent;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -34,14 +36,23 @@ class UploadController extends Controller
             
             $path = $request->file('file')->store('imports');
             Log::info('Fichier uploadé avec succès: ' . $path);
+            $jobId = (string) Str::uuid();
+
+            // Créer une entrée de suivi du job
+            JobProgress::create([
+                'job_id' => $jobId,
+                'status' => 'pending',
+                'progress' => 0,
+                'message' => 'En attente de traitement...'
+            ]);
 
             // Dispatch du job
-            dispatch(new ImportKiosquesJob($path));
+            dispatch(new ImportKiosquesJob($path, $jobId));
 
-            //ImportKiosquesJob::dispatch($path);
             
-
-            return back()->with('success', 'Fichier en cours de traitement. Les QR codes seront générés dans quelques instants.');
+            // Redirige vers la vue de progression
+            return view('progress', compact('jobId'));
+            
 
         } catch (\Exception $e) {
             Log::error('Erreur upload: ' . $e->getMessage());
