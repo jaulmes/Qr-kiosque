@@ -62,6 +62,33 @@ class UploadController extends Controller
 
     public function listKiosques(){
         $superAgents = Super_agent::all();
-        return view('liste-qr-code', compact('superAgents'));
+        $qrBasePath = public_path('qr_codes');
+        $kiosques = Kiosque::all();
+        return view('liste-qr-code', compact('superAgents', 'qrBasePath', 'kiosques'));
+    }
+
+    public function deleteAll(){
+        try {
+            // Supprimer d'abord les kiosques
+            Kiosque::truncate();
+
+            // Ensuite les distributeurs
+            Distributeur::query()->delete();
+
+            // Enfin les super agents
+            Super_agent::query()->delete();
+            
+            // Supprimer les fichiers QR codes
+            $qrBasePath = public_path('qr_codes');
+            if (File::exists($qrBasePath)) {
+                File::deleteDirectory($qrBasePath);
+            }
+
+            Log::info('Tous les kiosques et QR codes ont été supprimés avec succès.');
+            return back()->with('success', 'Tous les kiosques et QR codes ont été supprimés avec succès.');
+        } catch (\Exception $e) {
+            Log::error('Erreur lors de la suppression des kiosques: ' . $e->getMessage());
+            return back()->with('error', 'Une erreur est survenue lors de la suppression : ' . $e->getMessage());
+        }
     }
 }

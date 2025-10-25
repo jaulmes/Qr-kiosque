@@ -2,31 +2,85 @@
 
 @section('content')
 <div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+
+    <div class="d-flex justify-content-between align-items-start mb-3 flex-column flex-md-row">
+        
         <div>
             <h2 class="mb-1">📁 Gestion des QR Codes</h2>
             <p class="text-muted mb-0">Super Agent → Distributeur → Kiosque</p>
         </div>
-        <div>
-            <a href="{{ route('download.all.qr') }}" class="btn btn-success btn-sm" id="downloadAllBtn">
-                <i class="bi bi-download"></i> Télécharger tout (ZIP)
-            </a>
-            <button class="btn btn-outline-primary btn-sm me-2" onclick="expandAll()">
-                <i class="bi bi-arrows-expand"></i> Tout ouvrir
-            </button>
-            <button class="btn btn-outline-secondary btn-sm" onclick="collapseAll()">
-                <i class="bi bi-arrows-collapse"></i> Tout fermer
-            </button>
+        
+        <div class="d-flex gap-2 flex-wrap justify-content-start justify-content-md-end mt-3 mt-md-0">
+            
+            <div class="btn-group btn-group-sm" role="group">
+                <button class="btn btn-outline-primary" onclick="expandAll()">
+                    <i class="bi bi-arrows-expand"></i> Tout ouvrir
+                </button>
+                <button class="btn btn-outline-secondary" onclick="collapseAll()">
+                    <i class="bi bi-arrows-collapse"></i> Tout fermer
+                </button>
+            </div>
+
+            @php
+                use Illuminate\Support\Facades\File;
+
+                // Vérifier si le dossier "qr_codes" existe et contient des fichiers
+                $qrBasePath = public_path('qr_codes');
+                $qrFolderExists = File::exists($qrBasePath) && count(File::allFiles($qrBasePath)) > 0;
+
+                // Vérifier s’il y a des données en base
+                $hasData = !$superAgents->isEmpty();
+            @endphp
+
+            <div class="btn-group btn-group-sm" role="group">
+                <!-- Bouton de téléchargement -->
+                <a href="{{ route('download.all.qr') }}"
+                class="btn btn-success {{ (!$hasData && !$qrFolderExists) ? 'disabled' : '' }}"
+                title="Télécharger tous les QR Codes en ZIP"
+                @if(!$hasData && !$qrFolderExists) aria-disabled="true" @endif>
+                    <i class="bi bi-download"></i> Télécharger (ZIP)
+                </a>
+
+                <!-- Bouton de suppression -->
+                <form action="{{ route('kiosques.deleteAll') }}" method="POST"
+                    class="d-inline-block"
+                    onsubmit="return confirm('⚠️ Êtes-vous sûr de vouloir supprimer TOUS les kiosques et leurs QR codes ? Cette action est irréversible !')">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit"
+                            class="btn btn-danger {{ (!$hasData && !$qrFolderExists) ? 'disabled' : '' }}"
+                            title="Supprimer tous les kiosques"
+                            @if(!$hasData && !$qrFolderExists) disabled @endif>
+                        <i class="bi bi-trash"></i> Tout supprimer
+                    </button>
+                </form>
+            </div>
+
+
         </div>
-    </div>
+    </div> @if(session('success'))
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle me-2"></i>
+            {{ session('success') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    @endif
+    @if(session('error'))
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            {{ session('error') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    @endif
 
     @if($superAgents->isEmpty())
-        <div class="alert alert-info">
+        <div class="alert alert-info mt-3">
             <i class="bi bi-info-circle me-2"></i>
             Aucun Super Agent trouvé. Veuillez importer des données.
         </div>
     @else
         <div class="accordion" id="superAgentAccordion">
+            
             @foreach ($superAgents as $index => $sa)
                 <div class="accordion-item border rounded mb-3 shadow-sm">
                     <h2 class="accordion-header" id="heading-sa-{{ $sa->id }}">
@@ -35,13 +89,15 @@
                                 data-bs-target="#collapse-sa-{{ $sa->id }}" 
                                 aria-expanded="false" 
                                 aria-controls="collapse-sa-{{ $sa->id }}">
+                            
                             <div class="d-flex align-items-center w-100">
                                 <i class="bi bi-building text-primary me-3" style="font-size: 1.5rem;"></i>
                                 <div class="flex-grow-1">
                                     <strong class="d-block">{{ $sa->name }}</strong>
                                     <small class="text-muted">
                                         <i class="bi bi-geo-alt"></i> {{ $sa->region ?? 'N/A' }} • 
-                                        <i class="bi bi-shop"></i> {{ $sa->distributeurs->count() }} distributeur(s)
+                                        <i class="bi bi-shop"></i> {{ $sa->distributeurs->count() }} distributeur(s) •
+                                        <i class="bi bi-boxes"></i> {{ $sa->distributeurs->sum(fn($d) => $d->kiosques->count()) }} kiosque(s)
                                     </small>
                                 </div>
                             </div>
@@ -51,6 +107,7 @@
                          class="accordion-collapse collapse" 
                          aria-labelledby="heading-sa-{{ $sa->id }}" 
                          data-bs-parent="#superAgentAccordion">
+                        
                         <div class="accordion-body bg-light">
                             @if($sa->distributeurs->isEmpty())
                                 <p class="text-muted mb-0">
@@ -66,6 +123,7 @@
                                                         data-bs-target="#collapse-dist-{{ $dist->id }}" 
                                                         aria-expanded="false" 
                                                         aria-controls="collapse-dist-{{ $dist->id }}">
+                                                    
                                                     <div class="d-flex align-items-center w-100">
                                                         <i class="bi bi-shop text-success me-3" style="font-size: 1.3rem;"></i>
                                                         <div class="flex-grow-1">
@@ -82,6 +140,7 @@
                                                  class="accordion-collapse collapse" 
                                                  aria-labelledby="heading-dist-{{ $dist->id }}" 
                                                  data-bs-parent="#distributeurAccordion-{{ $sa->id }}">
+                                                
                                                 <div class="accordion-body">
                                                     @if($dist->kiosques->isEmpty())
                                                         <p class="text-muted mb-0">
@@ -139,12 +198,11 @@
                     </div>
                 </div>
             @endforeach
+
         </div>
     @endif
-</div>
 
-<!-- Modal QR Code -->
-<div class="modal fade" id="qrModal" tabindex="-1" aria-labelledby="qrModalLabel" aria-hidden="true">
+</div> <div class="modal fade" id="qrModal" tabindex="-1" aria-labelledby="qrModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -198,19 +256,12 @@
     align-items: center;
     justify-content: center;
 }
+/* Aligner le formulaire de suppression dans le groupe de boutons */
+.btn-group-sm > .btn-danger {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
 </style>
-
-<script>
-document.getElementById('downloadAllBtn').addEventListener('click', function() {
-    const btn = this;
-    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Préparation en cours...';
-    btn.classList.add('disabled');
-    setTimeout(() => {
-        btn.innerHTML = '<i class="bi bi-download"></i> Télécharger tout (ZIP)';
-        btn.classList.remove('disabled');
-    }, 8000);
-});
-</script>
 
 <script>
 const qrModal = new bootstrap.Modal(document.getElementById('qrModal'));

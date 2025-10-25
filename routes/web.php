@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [UploadController::class, 'index'])->name('upload.form');
 Route::post('upload', [UploadController::class, 'upload'])->name('upload.validate');
 Route::get('kiosques', [UploadController::class, 'listKiosques'])->name('kiosques.list');
+Route::delete('/kiosques/delete-all', [UploadController::class, 'deleteAll'])->name('kiosques.deleteAll');
+
 
 Route::get('/progress/{jobId}', function ($jobId) {
     return Cache::get("job_progress_{$jobId}", [
