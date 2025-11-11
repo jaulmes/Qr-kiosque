@@ -9,7 +9,9 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
+use Throwable;
 
 class ImportKiosquesJob implements ShouldQueue
 {
@@ -34,6 +36,20 @@ class ImportKiosquesJob implements ShouldQueue
             return;
         }
 
-        Excel::import(new KiosquesImport($this->batch()), $this->filePath);
+        try {
+            Excel::import(new KiosquesImport($this->batch()), $this->filePath);
+        } catch (Throwable $e) {
+            Log::error('Error during Excel import: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            if ($this->batching()) {
+                $this->batch()->fail($e);
+            }
+
+            throw $e;
+        }
     }
 }
