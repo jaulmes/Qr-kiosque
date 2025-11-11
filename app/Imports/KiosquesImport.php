@@ -11,27 +11,15 @@ use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithBatchInserts;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
-use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
-use Maatwebsite\Excel\Events\BeforeImport;
 
-class KiosquesImport implements ToCollection, WithHeadingRow, WithChunkReading, WithBatchInserts, WithEvents
+class KiosquesImport implements ToCollection, WithHeadingRow, WithChunkReading, WithBatchInserts
 {
     protected $batch;
 
     public function __construct($batch)
     {
         $this->batch = $batch;
-    }
-
-    public function registerEvents(): array
-    {
-        return [
-            BeforeImport::class => function(BeforeImport $event) {
-                $headings = $event->getReader()->getActiveSheet()->toArray()[0];
-                Log::info('Excel Headings: ' . implode(', ', $headings));
-            },
-        ];
     }
 
     /**
