@@ -25,8 +25,7 @@ Route::get('/download/all-qr', [QrCodeController::class, 'downloadAll'])->name('
 
 Route::get('/telecharger-qr/{jobId}', function ($jobId) {
     // Dossier racine des QR codes pour ce job
-    $rootPath = public_path("qr_codes");
-    $jobFolder = storage_path("app/qrcodes/{$jobId}");
+    $rootPath = storage_path("app/public/qr_codes");
     $zipPath = storage_path("app/qrcodes/{$jobId}.zip");
 
     // Vérifie que le dossier racine existe
