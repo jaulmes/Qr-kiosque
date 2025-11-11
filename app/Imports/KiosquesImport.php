@@ -38,7 +38,7 @@ class KiosquesImport implements ToCollection, WithHeadingRow, WithChunkReading, 
             $distribName = trim($rowData['cia_dsm_md_name'] ?? '');
             $kiosquePhone = trim($rowData['pos_msisdn'] ?? '');
             $kiosqueCode = trim($rowData['pos_code'] ?? '');
-            $kiosqueName = trim($rowData['pos_name'] ?? ''); // Correction ici
+            $kiosqueName = trim($rowData['pos_name'] ?? '');
             $bv = trim($rowData['bv'] ?? '');
 
             if (!$superAgentName || !$distribName || !$kiosqueName) {
@@ -75,7 +75,7 @@ class KiosquesImport implements ToCollection, WithHeadingRow, WithChunkReading, 
 
             $relativePath = "qr_codes/{$safeSuperAgent}/{$safeDistrib}";
 
-            $jobs[] = new GenerateQrCodeJob($kiosque, $relativePath);
+            $jobs[] = new GenerateQrCodeJob($kiosque->id, $relativePath);
         }
 
         if (!empty($jobs)) {

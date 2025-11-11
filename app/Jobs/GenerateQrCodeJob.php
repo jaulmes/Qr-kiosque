@@ -17,15 +17,15 @@ class GenerateQrCodeJob implements ShouldQueue
 {
     use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    protected Kiosque $kiosque;
+    protected int $kiosqueId;
     protected string $relativePath;
 
     /**
      * Create a new job instance.
      */
-    public function __construct(Kiosque $kiosque, string $relativePath)
+    public function __construct(int $kiosqueId, string $relativePath)
     {
-        $this->kiosque = $kiosque;
+        $this->kiosqueId = $kiosqueId;
         $this->relativePath  = $relativePath;
     }
 
@@ -38,7 +38,14 @@ class GenerateQrCodeJob implements ShouldQueue
             return;
         }
 
-        Log::info('Génération du QR Code pour le kiosque: ' . $this->kiosque->name);
+        $kiosque = Kiosque::find($this->kiosqueId);
+
+        if (!$kiosque) {
+            Log::error('Kiosque not found for ID: ' . $this->kiosqueId);
+            return;
+        }
+
+        Log::info('Génération du QR Code pour le kiosque: ' . $kiosque->name);
 
         $folderPath = public_path($this->relativePath);
 
@@ -46,7 +53,7 @@ class GenerateQrCodeJob implements ShouldQueue
             File::makeDirectory($folderPath, 0755, true, true);
         }
 
-        $safeKiosque = preg_replace('/[^\w\-]/', '_', $this->kiosque->name);
+        $safeKiosque = preg_replace('/[^\w\-]/', '_', $kiosque->name);
         $safeKiosque = preg_replace('/_+/', '_', $safeKiosque);
         $safeKiosque = trim($safeKiosque, '_');
 
@@ -57,7 +64,7 @@ class GenerateQrCodeJob implements ShouldQueue
                 ->size(300)
                 ->margin(1)
                 ->errorCorrection('H')
-                ->generate($this->kiosque->code, $qrCodePath);
+                ->generate($kiosque->code, $qrCodePath);
 
         } catch (\Exception $e) {
             Log::error('Erreur génération QR: ' . $e->getMessage());
@@ -67,7 +74,7 @@ class GenerateQrCodeJob implements ShouldQueue
                 ->size(300)
                 ->margin(1)
                 ->errorCorrection('H')
-                ->generate($this->kiosque->code, $qrCodePath);
+                ->generate($kiosque->code, $qrCodePath);
         }
     }
 }
