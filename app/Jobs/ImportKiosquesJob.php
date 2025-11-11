@@ -30,6 +30,10 @@ class ImportKiosquesJob implements ShouldQueue
      */
     public function handle(): void
     {
-        Excel::import(new KiosquesImport, $this->filePath);
+        if ($this->batching() && $this->batch()->cancelled()) {
+            return;
+        }
+
+        Excel::import(new KiosquesImport($this->batch()), $this->filePath);
     }
 }

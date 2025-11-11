@@ -6,17 +6,20 @@ use App\Jobs\GenerateQrCodeJob;
 use App\Models\Distributeur;
 use App\Models\Kiosque;
 use App\Models\Super_agent;
-use Illuminate\Bus\Batchable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithBatchInserts;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
-class KiosquesImport implements ToCollection, WithHeadingRow, WithChunkReading, WithBatchInserts, ShouldQueue
+class KiosquesImport implements ToCollection, WithHeadingRow, WithChunkReading, WithBatchInserts
 {
-    use Batchable;
+    protected $batch;
+
+    public function __construct($batch)
+    {
+        $this->batch = $batch;
+    }
 
     /**
      * @param Collection $rows
@@ -69,7 +72,7 @@ class KiosquesImport implements ToCollection, WithHeadingRow, WithChunkReading, 
 
             $jobs[] = new GenerateQrCodeJob($kiosque, $relativePath);
         }
-        $this->batch()->add($jobs);
+        $this->batch->add($jobs);
     }
 
     public function batchSize(): int
