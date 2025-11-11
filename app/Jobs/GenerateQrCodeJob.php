@@ -118,7 +118,7 @@ class GenerateQrCodeJob implements ShouldQueue
             return;
         }
 
-        $superAgent = $distributeur->super_agent;
+        $superAgent = $distributeur->superAgent;
         if (!$superAgent) {
             Log::warning("Super-agent non trouvé pour le distributeur ID: {$distributeur->id} ('{$distributeur->name}'), skipping.");
             return;

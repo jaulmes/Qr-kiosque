@@ -12,9 +12,13 @@ class QrCodeController extends Controller
 {
     public function downloadAll()
     {
-        $qrBasePath = public_path('qr_codes');
+        $qrBasePath = storage_path('app/public/qr_codes');
         $zipFileName = 'qr_codes_all.zip';
         $zipFilePath = storage_path("app/{$zipFileName}");
+
+        if (!File::isDirectory($qrBasePath) || count(File::allFiles($qrBasePath)) === 0) {
+            return back()->with('error', 'Aucun QR code à télécharger. Le dossier est vide ou n\'existe pas.');
+        }
 
         // Supprimer le ZIP précédent s'il existe
         if (file_exists($zipFilePath)) {

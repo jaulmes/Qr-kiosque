@@ -48,6 +48,7 @@ class UploadController extends Controller
 
             // Dispatch du job
             dispatch(new ImportKiosquesJob($path, $jobId));
+            Log::info("Job d'importation dispatché avec l'ID: {$jobId}");
 
             
             // Redirige vers la vue de progression
@@ -62,7 +63,7 @@ class UploadController extends Controller
 
     public function listKiosques(){
         $superAgents = Super_agent::all();
-        $qrBasePath = public_path('qr_codes');
+        $qrBasePath = storage_path('app/public/qr_codes');
         $kiosques = Kiosque::all();
         return view('liste-qr-code', compact('superAgents', 'qrBasePath', 'kiosques'));
     }
@@ -79,7 +80,7 @@ class UploadController extends Controller
             Super_agent::query()->delete();
             
             // Supprimer les fichiers QR codes
-            $qrBasePath = public_path('qr_codes');
+            $qrBasePath = storage_path('app/public/qr_codes');
             if (File::exists($qrBasePath)) {
                 File::deleteDirectory($qrBasePath);
             }
