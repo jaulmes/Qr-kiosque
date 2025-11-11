@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\Kiosque;
 use Illuminate\Bus\Batchable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -16,12 +17,13 @@ class GenerateQrCodeJob implements ShouldQueue
 {
     use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    protected $kiosque, $relativePath;
+    protected Kiosque $kiosque;
+    protected string $relativePath;
 
     /**
      * Create a new job instance.
      */
-    public function __construct($kiosque, $relativePath)
+    public function __construct(Kiosque $kiosque, string $relativePath)
     {
         $this->kiosque = $kiosque;
         $this->relativePath  = $relativePath;
