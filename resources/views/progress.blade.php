@@ -2,23 +2,43 @@
 
 @section('content')
 <div class="container text-center py-5">
-    <h3>📦 Génération des QR Codes</h3>
-    <p id="message">Initialisation...</p>
+    <h3>📦 Traitement de votre fichier en cours...</h3>
+    <p id="overall-message" class="text-muted">Initialisation...</p>
 
-    <div class="progress my-4" style="height: 25px;">
-        <div id="progress-bar"
-             class="progress-bar progress-bar-striped progress-bar-animated"
-             role="progressbar"
-             style="width: 0%">0%</div>
+    <!-- Reading Progress -->
+    <div class="mt-4">
+        <h5>1. Lecture du fichier Excel</h5>
+        <div class="progress" style="height: 25px;">
+            <div id="reading-progress-bar"
+                 class="progress-bar bg-info progress-bar-striped progress-bar-animated"
+                 role="progressbar"
+                 style="width: 0%">0%</div>
+        </div>
+        <p id="reading-details" class="mt-2"></p>
     </div>
 
-    <p id="details"></p>
+    <!-- Generating Progress -->
+    <div class="mt-4">
+        <h5>2. Génération des codes QR</h5>
+        <div class="progress" style="height: 25px;">
+            <div id="generating-progress-bar"
+                 class="progress-bar bg-success progress-bar-striped progress-bar-animated"
+                 role="progressbar"
+                 style="width: 0%">0%</div>
+        </div>
+        <p id="generating-details" class="mt-2"></p>
+    </div>
 
-    <div id="done" class="alert alert-success d-none">
-        ✅ Le traitement est terminé ! Vous pouvez consulter vos QR codes.
+    <!-- Time Remaining -->
+    <div id="time-remaining-container" class="mt-4" style="display: none;">
+        <p><strong>Temps restant estimé :</strong> <span id="time-remaining">--</span></p>
+    </div>
+
+    <div id="done" class="alert alert-success d-none mt-4">
+        ✅ Le traitement est terminé !
         <br>
         <a href="/telecharger-qr/{{ $jobId }}" class="btn btn-primary mt-3">
-            📥 Télécharger en zip(cela téléchargera avec les anciens)
+            📥 Télécharger tous les codes QR (.zip)
         </a>
     </div>
 </div>
@@ -26,55 +46,79 @@
 <script>
     const jobId = "{{ $jobId }}";
 
+    function formatTime(seconds) {
+        if (seconds === null || seconds < 0) return "--";
+        if (seconds < 60) return `${seconds} sec`;
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        return `${minutes} min ${remainingSeconds} sec`;
+    }
+
     async function checkProgress() {
         try {
             const response = await fetch(`/progress/${jobId}`);
             if (!response.ok) {
-                // Gérer les erreurs serveur
                 console.error("Erreur lors de la récupération de la progression.");
                 return;
             }
             
             const data = await response.json();
 
-            const bar = document.getElementById('progress-bar');
-            const message = document.getElementById('message');
-            const details = document.getElementById('details');
+            // Selectors
+            const overallMessage = document.getElementById('overall-message');
+            const readingBar = document.getElementById('reading-progress-bar');
+            const readingDetails = document.getElementById('reading-details');
+            const generatingBar = document.getElementById('generating-progress-bar');
+            const generatingDetails = document.getElementById('generating-details');
+            const timeContainer = document.getElementById('time-remaining-container');
+            const timeRemaining = document.getElementById('time-remaining');
             const done = document.getElementById('done');
 
-            bar.style.width = data.progress + '%';
-            bar.innerText = data.progress + '%';
-            message.innerText = data.message;
-            
-            // Assurer que les valeurs existent avant de les afficher
-            details.innerText = `${data.processed ?? 0} / ${data.total ?? 0} kiosques traités`;
+            // Update UI
+            overallMessage.innerText = data.message || "Chargement...";
 
-            if (data.status === 'finished' || data.progress >= 100) {
+            // Reading progress
+            if (data.reading) {
+                readingBar.style.width = `${data.reading.progress}%`;
+                readingBar.innerText = `${data.reading.progress}%`;
+                readingDetails.innerText = `${data.reading.processed} / ${data.reading.total} lignes lues`;
+            }
+
+            // Generating progress
+            if (data.generating) {
+                generatingBar.style.width = `${data.generating.progress}%`;
+                generatingBar.innerText = `${data.generating.progress}%`;
+                generatingDetails.innerText = `${data.generating.processed} / ${data.generating.total} codes QR générés`;
+            }
+
+            // Time remaining
+            if (data.time && data.time.remaining !== null) {
+                timeContainer.style.display = 'block';
+                timeRemaining.innerText = formatTime(data.time.remaining);
+            }
+
+            // Status check
+            if (data.status === 'finished') {
                 done.classList.remove('d-none');
-                bar.classList.remove('progress-bar-animated');
-                bar.style.width = '100%'; // Forcer 100% à la fin
-                bar.innerText = '100%';
-                clearInterval(interval); // Arrêter l'intervalle
+                readingBar.classList.remove('progress-bar-animated');
+                generatingBar.classList.remove('progress-bar-animated');
+                timeContainer.style.display = 'none';
+                clearInterval(interval);
             } else if (data.status === 'failed') {
-                 // Gérer un échec
-                message.innerText = "Une erreur est survenue: " + data.message;
-                bar.classList.add('bg-danger');
-                bar.classList.remove('progress-bar-animated');
+                overallMessage.innerText = "Une erreur est survenue: " + data.message;
+                readingBar.classList.add('bg-danger');
+                generatingBar.classList.add('bg-danger');
+                readingBar.classList.remove('progress-bar-animated');
+                generatingBar.classList.remove('progress-bar-animated');
                 clearInterval(interval);
             }
         } catch (error) {
             console.error('Erreur fetch:', error);
-            // Arrêter si le fetch échoue (ex: page rechargée, serveur mort)
             clearInterval(interval);
         }
     }
 
-    // ✅ CHANGER L'INTERVALLE
-    // 2ms est beaucoup trop rapide et va saturer votre serveur.
-    // Mettez 1000ms (1 seconde) ou 1500ms.
-    const interval = setInterval(checkProgress, 300); 
-
-    // Lancer une première fois immédiatement
-    checkProgress(); 
+    const interval = setInterval(checkProgress, 1000); // Check every second
+    checkProgress(); // Initial check
 </script>
 @endsection

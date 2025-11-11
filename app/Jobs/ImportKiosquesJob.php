@@ -35,15 +35,25 @@ class ImportKiosquesJob implements ShouldQueue
         $absolutePath = Storage::path($this->filePath);
 
         // Get total rows for progress tracking
-        $totalRows = Excel::toArray([], $absolutePath)[0];
-        $totalRows = count($totalRows) - 1; // Subtract header row
+        $totalRows = count(Excel::toArray([], $absolutePath)[0]) - 1; // Subtract header row
 
         Cache::put("job_progress_{$this->jobId}", [
-            'total' => $totalRows,
-            'processed' => 0,
-            'progress' => 0,
             'status' => 'processing',
-            'message' => 'Initialisation...'
+            'message' => 'Initialisation de la lecture du fichier...',
+            'reading' => [
+                'processed' => 0,
+                'total' => $totalRows,
+                'progress' => 0,
+            ],
+            'generating' => [
+                'processed' => 0,
+                'total' => $totalRows,
+                'progress' => 0,
+            ],
+            'time' => [
+                'start' => time(),
+                'remaining' => null,
+            ],
         ]);
 
         Excel::import(new KiosquesImport($this->jobId), $absolutePath);

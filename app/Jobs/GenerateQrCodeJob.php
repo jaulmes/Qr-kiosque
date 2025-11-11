@@ -35,7 +35,6 @@ class GenerateQrCodeJob implements ShouldQueue
      */
     public function handle(): void
     {
-        $processedInThisChunk = 0;
         foreach ($this->kiosqueData as $data) {
             if (empty($data['super_agent_name']) || empty($data['distributor_name']) || empty($data['kiosque_name'])) {
                 continue;
@@ -63,25 +62,42 @@ class GenerateQrCodeJob implements ShouldQueue
             );
 
             $this->generateQrCode($kiosque);
-            $processedInThisChunk++;
         }
 
-        $progressData = Cache::get("job_progress_{$this->jobId}");
-        $total = $progressData['total'] ?? 0;
-        $processed = ($progressData['processed'] ?? 0) + $processedInThisChunk;
-        $progress = $total > 0 ? intval(($processed / $total) * 100) : 0;
-        $status = ($processed >= $total) ? 'finished' : 'processing';
-        $message = ($status === 'finished')
-            ? "Tous les QR codes ont été générés"
-            : "Génération du QR code {$processed} / {$total}";
+        $this->updateProgress(count($this->kiosqueData));
+    }
 
-        Cache::put("job_progress_{$this->jobId}", [
-            'total' => $total,
-            'processed' => $processed,
-            'progress' => $progress,
-            'status' => $status,
-            'message' => $message
-        ]);
+    private function updateProgress(int $processedInThisChunk)
+    {
+        $progressData = Cache::get("job_progress_{$this->jobId}");
+
+        // Update generating progress
+        $processed = ($progressData['generating']['processed'] ?? 0) + $processedInThisChunk;
+        $total = $progressData['generating']['total'] ?? 0;
+        $progress = $total > 0 ? intval(($processed / $total) * 100) : 0;
+
+        $progressData['generating']['processed'] = $processed;
+        $progressData['generating']['progress'] = $progress;
+
+        // Calculate time remaining
+        $startTime = $progressData['time']['start'] ?? time();
+        $elapsedTime = time() - $startTime;
+        $timePerItem = $processed > 0 ? $elapsedTime / $processed : 0;
+        $remainingItems = $total - $processed;
+        $remainingTime = $remainingItems > 0 ? ceil($timePerItem * $remainingItems) : 0;
+
+        $progressData['time']['remaining'] = $remainingTime;
+
+        // Update overall status
+        if ($processed >= $total) {
+            $progressData['status'] = 'finished';
+            $progressData['message'] = 'Terminé ! Tous les codes QR ont été générés.';
+        } else {
+            $progressData['status'] = 'processing';
+            $progressData['message'] = "Génération des codes QR ({$processed} / {$total})...";
+        }
+
+        Cache::put("job_progress_{$this->jobId}", $progressData);
     }
 
     private function generateQrCode(Kiosque $kiosque)
