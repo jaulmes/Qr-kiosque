@@ -2,14 +2,15 @@
 
 namespace App\Jobs;
 
+use App\Models\Distributeur;
+use App\Models\Kiosque;
+use App\Models\Super_agent;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
@@ -18,16 +19,15 @@ class GenerateQrCodeJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    protected $kiosquesData, $jobId, $total;
+    protected $kiosqueData, $jobId;
 
     /**
      * Create a new job instance.
      */
-    public function __construct( $kiosquesData, $jobId, $total)
+    public function __construct(array $kiosqueData, $jobId)
     {
-        $this->kiosquesData = $kiosquesData;
+        $this->kiosqueData = $kiosqueData;
         $this->jobId = $jobId;
-        $this->total = $total;
     }
 
     /**
@@ -35,72 +35,102 @@ class GenerateQrCodeJob implements ShouldQueue
      */
     public function handle(): void
     {
-        foreach ($this->kiosquesData as $data) {
-            $kiosque = $data['kiosque'];
-            $relativePath = $data['relativePath'];
-            //  Journaliser le début du traitement pour ce kiosque
-            Log::info('Génération du QR Code pour le kiosque: ' . $kiosque->name);
-
-            //  Définir le chemin absolu vers le dossier où seront enregistrés les QR codes
-            $folderPath = public_path($relativePath);
-
-            //  Vérifier si le dossier existe, sinon le créer avec les permissions nécessaires
-            if (!File::exists($folderPath)) {
-                File::makeDirectory($folderPath, 0755, true, true);
+        $processedInThisChunk = 0;
+        foreach ($this->kiosqueData as $data) {
+            if (empty($data['super_agent_name']) || empty($data['distributor_name']) || empty($data['kiosque_name'])) {
+                continue;
             }
 
-            //  Nettoyer le nom du kiosque pour éviter les caractères spéciaux dans le nom du fichier
-            $safeKiosque = preg_replace('/[^\w\-]/', '_', $kiosque->name); // Remplace tout caractère non autorisé par "_"
-            $safeKiosque = preg_replace('/_+/', '_', $safeKiosque); // Évite les doubles underscores
-            $safeKiosque = trim($safeKiosque, '_'); // Supprime les underscores au début/fin du nom
+            $superAgent = Super_agent::firstOrCreate(
+                ['name' => $data['super_agent_name']],
+                ['region' => $data['region']]
+            );
 
-            //  Définir le chemin complet du fichier SVG à générer
-            $qrCodePath = "{$folderPath}/{$safeKiosque}.svg";
+            $distributeur = Distributeur::firstOrCreate(
+                ['name' => $data['distributor_name'], 'super_agent_id' => $superAgent->id],
+                ['phone' => $data['distributor_phone']]
+            );
 
+            $kiosque = Kiosque::updateOrCreate(
+                ['code' => $data['kiosque_code'] . '@momopay'],
+                [
+                    'name' => $data['kiosque_name'],
+                    'phone' => $data['kiosque_phone'],
+                    'distributeur_id' => $distributeur->id,
+                    'bv' => $data['bv'],
+                    'region' => $data['region'],
+                ]
+            );
+
+            $this->generateQrCode($kiosque);
+            $processedInThisChunk++;
+        }
+
+        $progressData = Cache::get("job_progress_{$this->jobId}");
+        $total = $progressData['total'] ?? 0;
+        $processed = ($progressData['processed'] ?? 0) + $processedInThisChunk;
+        $progress = $total > 0 ? intval(($processed / $total) * 100) : 0;
+        $status = ($processed >= $total) ? 'finished' : 'processing';
+        $message = ($status === 'finished')
+            ? "Tous les QR codes ont été générés"
+            : "Génération du QR code {$processed} / {$total}";
+
+        Cache::put("job_progress_{$this->jobId}", [
+            'total' => $total,
+            'processed' => $processed,
+            'progress' => $progress,
+            'status' => $status,
+            'message' => $message
+        ]);
+    }
+
+    private function generateQrCode(Kiosque $kiosque)
+    {
+        $distributeur = $kiosque->distributeur;
+        if (!$distributeur) {
+            Log::warning("Distributeur non trouvé pour le kiosque ID: {$kiosque->id} ('{$kiosque->name}'), skipping.");
+            return;
+        }
+
+        $superAgent = $distributeur->super_agent;
+        if (!$superAgent) {
+            Log::warning("Super-agent non trouvé pour le distributeur ID: {$distributeur->id} ('{$distributeur->name}'), skipping.");
+            return;
+        }
+
+        $safeSuperAgent = preg_replace('/[^\w\-]/', '_', $superAgent->name);
+        $safeDistrib = preg_replace('/[^\w\-]/', '_', $distributeur->name);
+        $safeKiosque = preg_replace('/[^\w\-]/', '_', $kiosque->name);
+
+        $relativePath = "qr_codes/{$safeSuperAgent}/{$safeDistrib}";
+        $folderPath = public_path($relativePath);
+
+        if (!File::exists($folderPath)) {
+            File::makeDirectory($folderPath, 0755, true, true);
+        }
+
+        $qrCodePath = "{$folderPath}/{$safeKiosque}.svg";
+
+        try {
+            QrCode::format('svg')
+                ->size(300)
+                ->margin(1)
+                ->errorCorrection('H')
+                ->generate($kiosque->code, $qrCodePath);
+        } catch (\Exception $e) {
+            Log::error('Erreur génération QR (SVG): ' . $e->getMessage());
+
+            // Fallback to PNG
             try {
-                //  Générer le QR Code au format SVG (format léger et indépendant d’ImageMagick)
-                QrCode::format('svg')
-                    ->size(300)               // Taille du QR code
-                    ->margin(1)               // Petite marge autour
-                    ->errorCorrection('H')    // Niveau de correction d’erreur élevé (H = 30%)
-                    ->generate($kiosque->code, $qrCodePath); // Génère le fichier dans le chemin défini
-
-            } catch (\Exception $e) {
-                //  En cas d’échec de génération SVG, journaliser l’erreur
-                Log::error('Erreur génération QR: ' . $e->getMessage());
-
-                //  Repli (fallback) : générer le QR Code au format PNG avec la librairie GD
                 $qrCodePath = "{$folderPath}/{$safeKiosque}.png";
                 QrCode::format('png')
                     ->size(300)
                     ->margin(1)
                     ->errorCorrection('H')
                     ->generate($kiosque->code, $qrCodePath);
+            } catch (\Exception $pngException) {
+                Log::error('Erreur génération QR (PNG): ' . $pngException->getMessage());
             }
-
         }
-        $processed = Cache::increment("job_progress_{$this->jobId}_count", count($this->kiosquesData));
-
-        // 📈 Calculer le pourcentage d’avancement du traitement
-        $progress = intval(($processed / $this->total) * 100);
-
-        //  Déterminer le statut global du job
-        $status = ($processed >= $this->total) ? 'finished' : 'processing';
-
-        // Définir un message lisible pour l’utilisateur selon le statut
-        $message = ($status === 'finished')
-                ? " Tous les QR codes ont été générés"
-                : "Génération du QR code {$processed} / {$this->total}";
-
-        //  Mettre à jour les informations de progression dans le cache (utilisées pour la barre de chargement)
-        Cache::put("job_progress_{$this->jobId}", [
-            'total' => $this->total,        // Nombre total de kiosques à traiter
-            'processed' => $processed,      // Nombre de kiosques déjà traités
-            'progress' => $progress,        // Pourcentage d’avancement
-            'status' => $status,            // Statut actuel : "processing" ou "finished"
-            'message' => $message           // Message d’état pour l’affichage sur la vue
-        ]);
-        //  Fin du job pour ce kiosque — à ce stade, la barre de progression peut se mettre à jour automatiquement via AJAX
     }
-
 }
