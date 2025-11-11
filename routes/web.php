@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BatchProgressController;
 use App\Http\Controllers\QrCodeController;
 use App\Http\Controllers\UploadController;
 use App\Models\JobProgress;
@@ -14,13 +15,7 @@ Route::get('kiosques', [UploadController::class, 'listKiosques'])->name('kiosque
 Route::delete('/kiosques/delete-all', [UploadController::class, 'deleteAll'])->name('kiosques.deleteAll');
 
 
-Route::get('/progress/{jobId}', function ($jobId) {
-    return Cache::get("job_progress_{$jobId}", [
-        'progress' => 0,
-        'status' => 'pending',
-        'message' => 'En attente du démarrage du job'
-    ]);
-});
+Route::get('/batch-progress/{batchId}', BatchProgressController::class);
 Route::get('/download/all-qr', [QrCodeController::class, 'downloadAll'])->name('download.all.qr');
 
 Route::get('/telecharger-qr/{jobId}', function ($jobId) {
