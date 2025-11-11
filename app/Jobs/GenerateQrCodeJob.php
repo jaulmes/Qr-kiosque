@@ -35,36 +35,46 @@ class GenerateQrCodeJob implements ShouldQueue
      */
     public function handle(): void
     {
+        Log::info("GenerateQrCodeJob started for job ID: {$this->jobId} with " . count($this->kiosqueData) . " items.");
+
         foreach ($this->kiosqueData as $data) {
             if (empty($data['super_agent_name']) || empty($data['distributor_name']) || empty($data['kiosque_name'])) {
+                Log::warning('Skipping row due to missing required data.', ['data' => $data]);
                 continue;
             }
 
-            $superAgent = Super_agent::firstOrCreate(
-                ['name' => $data['super_agent_name']],
-                ['region' => $data['region']]
-            );
+            try {
+                $superAgent = Super_agent::firstOrCreate(
+                    ['name' => $data['super_agent_name']],
+                    ['region' => $data['region']]
+                );
 
-            $distributeur = Distributeur::firstOrCreate(
-                ['name' => $data['distributor_name'], 'super_agent_id' => $superAgent->id],
-                ['phone' => $data['distributor_phone']]
-            );
+                $distributeur = Distributeur::firstOrCreate(
+                    ['name' => $data['distributor_name'], 'super_agent_id' => $superAgent->id],
+                    ['phone' => $data['distributor_phone']]
+                );
 
-            $kiosque = Kiosque::updateOrCreate(
-                ['code' => $data['kiosque_code'] . '@momopay'],
-                [
-                    'name' => $data['kiosque_name'],
-                    'phone' => $data['kiosque_phone'],
-                    'distributeur_id' => $distributeur->id,
-                    'bv' => $data['bv'],
-                    'region' => $data['region'],
-                ]
-            );
+                $kiosque = Kiosque::updateOrCreate(
+                    ['code' => $data['kiosque_code'] . '@momopay'],
+                    [
+                        'name' => $data['kiosque_name'],
+                        'phone' => $data['kiosque_phone'],
+                        'distributeur_id' => $distributeur->id,
+                        'bv' => $data['bv'],
+                        'region' => $data['region'],
+                    ]
+                );
 
-            $this->generateQrCode($kiosque);
+                Log::info("Kiosque created/updated successfully: {$kiosque->name}");
+
+                $this->generateQrCode($kiosque);
+            } catch (\Exception $e) {
+                Log::error("Error processing data chunk for job ID: {$this->jobId}. Error: " . $e->getMessage(), ['data' => $data]);
+            }
         }
 
         $this->updateProgress(count($this->kiosqueData));
+        Log::info("GenerateQrCodeJob finished for job ID: {$this->jobId}.");
     }
 
     private function updateProgress(int $processedInThisChunk)
@@ -119,13 +129,14 @@ class GenerateQrCodeJob implements ShouldQueue
         $safeKiosque = preg_replace('/[^\w\-]/', '_', $kiosque->name);
 
         $relativePath = "qr_codes/{$safeSuperAgent}/{$safeDistrib}";
-        $folderPath = public_path($relativePath);
+        $folderPath = storage_path("app/public/{$relativePath}");
 
         if (!File::exists($folderPath)) {
             File::makeDirectory($folderPath, 0755, true, true);
         }
 
         $qrCodePath = "{$folderPath}/{$safeKiosque}.svg";
+        Log::info("Generating QR code for kiosque '{$kiosque->name}' at: {$qrCodePath}");
 
         try {
             QrCode::format('svg')
