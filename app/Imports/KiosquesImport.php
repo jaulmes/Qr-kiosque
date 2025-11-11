@@ -7,18 +7,31 @@ use App\Models\Distributeur;
 use App\Models\Kiosque;
 use App\Models\Super_agent;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithBatchInserts;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use Maatwebsite\Excel\Events\BeforeImport;
 
-class KiosquesImport implements ToCollection, WithHeadingRow, WithChunkReading, WithBatchInserts
+class KiosquesImport implements ToCollection, WithHeadingRow, WithChunkReading, WithBatchInserts, WithEvents
 {
     protected $batch;
 
     public function __construct($batch)
     {
         $this->batch = $batch;
+    }
+
+    public function registerEvents(): array
+    {
+        return [
+            BeforeImport::class => function(BeforeImport $event) {
+                $headings = $event->getReader()->getActiveSheet()->toArray()[0];
+                Log::info('Excel Headings: ' . implode(', ', $headings));
+            },
+        ];
     }
 
     /**
@@ -28,16 +41,20 @@ class KiosquesImport implements ToCollection, WithHeadingRow, WithChunkReading, 
     {
         $jobs = [];
         foreach ($rows as $row) {
-            $region = $row['region'] ?? null;
-            $superAgentName = trim($row['sa_name'] ?? '');
-            $distribPhone = trim($row['cia_dsm_md_msisdn'] ?? '');
-            $distribName = trim($row['cia_dsm_md_name'] ?? '');
-            $kiosquePhone = trim($row['pos_msisdn'] ?? '');
-            $kiosqueCode = trim($row['pos_code'] ?? '');
-            $kiosqueName = trim($row['pos_msisdn'] ?? '');
-            $bv = trim($row['bv'] ?? '');
+            $rowData = $row->toArray();
+            Log::info('Processing row: ', $rowData);
+
+            $region = $rowData['region'] ?? null;
+            $superAgentName = trim($rowData['sa_name'] ?? '');
+            $distribPhone = trim($rowData['cia_dsm_md_msisdn'] ?? '');
+            $distribName = trim($rowData['cia_dsm_md_name'] ?? '');
+            $kiosquePhone = trim($rowData['pos_msisdn'] ?? '');
+            $kiosqueCode = trim($rowData['pos_code'] ?? '');
+            $kiosqueName = trim($rowData['pos_name'] ?? ''); // Correction ici
+            $bv = trim($rowData['bv'] ?? '');
 
             if (!$superAgentName || !$distribName || !$kiosqueName) {
+                Log::warning('Skipping row due to missing data: ', $rowData);
                 continue;
             }
 
@@ -72,7 +89,10 @@ class KiosquesImport implements ToCollection, WithHeadingRow, WithChunkReading, 
 
             $jobs[] = new GenerateQrCodeJob($kiosque, $relativePath);
         }
-        $this->batch->add($jobs);
+
+        if (!empty($jobs)) {
+            $this->batch->add($jobs);
+        }
     }
 
     public function batchSize(): int
