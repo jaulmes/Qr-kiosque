@@ -85,64 +85,76 @@ class ImportKiosquesJob implements ShouldQueue
             'message' => 'Initialisation...' // message affiché dans l’interface
         ]);
 
-        // 🔁 Parcourt chaque ligne du fichier Excel (chaque ligne représente un kiosque)
-        foreach ($rows as $row) {
+        // Chunk the rows into smaller arrays
+        $chunks = array_chunk($rows, 1000);
 
-            // Associe chaque colonne à son entête correspondante
-            $rowData = array_combine($headers, $row);
+        foreach ($chunks as $chunk) {
+            $kiosquesData = [];
+            // 🔁 Parcourt chaque ligne du fichier Excel (chaque ligne représente un kiosque)
+            foreach ($chunk as $row) {
 
-            // 🔹 Récupère les différentes colonnes nécessaires
-            $region = $rowData['REGION'] ?? null;
-            $superAgentName = trim($rowData['SA NAME'] ?? '');
-            $distribPhone = trim($rowData['Cia/ DSM/MD MSISDN'] ?? '');
-            $distribName = trim($rowData['Cia/ DSM/MD NAME'] ?? '');
-            $kiosquePhone = trim($rowData['PoS MSISDN'] ?? '');
-            $kiosqueCode = trim($rowData['PoS code'] ?? '');
-            $kiosqueName = trim($rowData['PoS MSISDN'] ?? '');
-            $bv = trim($rowData['bv'] ?? '');
+                // Associe chaque colonne à son entête correspondante
+                $rowData = array_combine($headers, $row);
 
-            // Si certaines données essentielles manquent, on passe à la ligne suivante
-            if (!$superAgentName || !$distribName || !$kiosqueName) continue;
+                // 🔹 Récupère les différentes colonnes nécessaires
+                $region = $rowData['REGION'] ?? null;
+                $superAgentName = trim($rowData['SA NAME'] ?? '');
+                $distribPhone = trim($rowData['Cia/ DSM/MD MSISDN'] ?? '');
+                $distribName = trim($rowData['Cia/ DSM/MD NAME'] ?? '');
+                $kiosquePhone = trim($rowData['PoS MSISDN'] ?? '');
+                $kiosqueCode = trim($rowData['PoS code'] ?? '');
+                $kiosqueName = trim($rowData['PoS MSISDN'] ?? '');
+                $bv = trim($rowData['bv'] ?? '');
 
-            // 🔹 Nettoie les noms pour éviter les caractères spéciaux dans les noms de fichiers
-            $safeSuperAgent = preg_replace('/[^\w\-]/', '_', $superAgentName);
-            $safeDistrib = preg_replace('/[^\w\-]/', '_', $distribName);
-            $safeKiosque = preg_replace('/[^\w\-]/', '_', $kiosqueName);
+                // Si certaines données essentielles manquent, on passe à la ligne suivante
+                if (!$superAgentName || !$distribName || !$kiosqueName) continue;
 
-            // 1️⃣ Crée ou récupère le Super Agent correspondant à la ligne du fichier
-            $superAgent = Super_agent::firstOrCreate(
-                ['name' => $superAgentName],
-                ['region' => $region]
-            );
+                // 🔹 Nettoie les noms pour éviter les caractères spéciaux dans les noms de fichiers
+                $safeSuperAgent = preg_replace('/[^\w\-]/', '_', $superAgentName);
+                $safeDistrib = preg_replace('/[^\w\-]/', '_', $distribName);
+                $safeKiosque = preg_replace('/[^\w\-]/', '_', $kiosqueName);
 
-            // 2️⃣ Crée ou récupère le Distributeur lié à ce Super Agent
-            $distributeur = Distributeur::firstOrCreate(
-                [
-                    'name' => $distribName,
-                    'super_agent_id' => $superAgent->id
-                ],
-                ['phone' => $distribPhone]
-            );
+                // 1️⃣ Crée ou récupère le Super Agent correspondant à la ligne du fichier
+                $superAgent = Super_agent::firstOrCreate(
+                    ['name' => $superAgentName],
+                    ['region' => $region]
+                );
 
-            // 3️⃣ Crée ou met à jour le Kiosque correspondant
-            $kiosque = Kiosque::updateOrCreate(
-                ['code' => $kiosqueCode . '@momopay'], // le code est unique
-                [
-                    'name' => $kiosqueName,
-                    'phone' => $kiosquePhone,
-                    'distributeur_id' => $distributeur->id,
-                    'bv' => $bv,
-                    'region' => $region
-                ]
-            );
+                // 2️⃣ Crée ou récupère le Distributeur lié à ce Super Agent
+                $distributeur = Distributeur::firstOrCreate(
+                    [
+                        'name' => $distribName,
+                        'super_agent_id' => $superAgent->id
+                    ],
+                    ['phone' => $distribPhone]
+                );
 
-            // 🔹 Définit le dossier de sauvegarde du QR code en fonction de l’arborescence
-            // Exemple : qr_codes/SuperAgent/Distributeur/
-            $relativePath = "qr_codes/{$safeSuperAgent}/{$safeDistrib}";
+                // 3️⃣ Crée ou met à jour le Kiosque correspondant
+                $kiosque = Kiosque::updateOrCreate(
+                    ['code' => $kiosqueCode . '@momopay'], // le code est unique
+                    [
+                        'name' => $kiosqueName,
+                        'phone' => $kiosquePhone,
+                        'distributeur_id' => $distributeur->id,
+                        'bv' => $bv,
+                        'region' => $region
+                    ]
+                );
 
+                // 🔹 Définit le dossier de sauvegarde du QR code en fonction de l’arborescence
+                // Exemple : qr_codes/SuperAgent/Distributeur/
+                $relativePath = "qr_codes/{$safeSuperAgent}/{$safeDistrib}";
+
+                $kiosquesData[] = [
+                    'superAgent' => $superAgent,
+                    'distributeur' => $distributeur,
+                    'kiosque' => $kiosque,
+                    'relativePath' => $relativePath,
+                ];
+            }
             // 🚀 Déclenche le job asynchrone de génération du QR code pour ce kiosque
             // Chaque QR code sera généré par un worker séparé
-            GenerateQrCodeJob::dispatch($superAgent, $distributeur, $kiosque, $relativePath, $this->jobId, $total);
+            GenerateQrCodeJob::dispatch($kiosquesData, $this->jobId, $total);
         }
 
         // 🧹 (Optionnel) Supprimer le fichier Excel après traitement
