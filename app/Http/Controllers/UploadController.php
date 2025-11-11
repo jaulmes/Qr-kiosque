@@ -39,7 +39,7 @@ class UploadController extends Controller
             $jobId = (string) Str::uuid();
 
             // Créer une entrée de suivi du job
-            JobProgress::create([
+            $jobProgress = JobProgress::create([
                 'job_id' => $jobId,
                 'status' => 'pending',
                 'progress' => 0,
@@ -47,11 +47,11 @@ class UploadController extends Controller
             ]);
 
             // Dispatch du job
-            dispatch(new ImportKiosquesJob($path, $jobId));
+            dispatch(new ImportKiosquesJob($path, $jobProgress));
 
             
             // Redirige vers la vue de progression
-            return view('progress', compact('jobId'));
+            return view('progress', ['jobId' => $jobProgress->job_id]);
             
 
         } catch (\Exception $e) {
