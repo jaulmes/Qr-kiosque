@@ -31,7 +31,7 @@ Route::get('/telecharger-qr/{jobId}', function ($jobId) {
 
     // Vérifie que le dossier racine existe
     if (!File::exists($rootPath)) {
-        return back()->with('error', 'Aucun QR code trouvé à compresser.');
+        return redirect('/')->with('error', 'Aucun QR code trouvé à compresser. Le dossier de destination n\'existe pas.');
     }
 
     // 🔹 Créer un dossier temporaire pour ce job (si pas déjà créé)
