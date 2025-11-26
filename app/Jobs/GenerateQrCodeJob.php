@@ -75,15 +75,45 @@ class GenerateQrCodeJob implements ShouldQueue
 
         // 4. Mise à jour Progression (Identique à votre code)
         $processed = Cache::increment("job_progress_{$this->jobId}_count");
-        $progress = intval(($processed / $this->total) * 100);
-        $status = ($processed >= $this->total) ? 'finished' : 'processing';
-        
-        Cache::put("job_progress_{$this->jobId}", [
-            'total' => $this->total,
-            'processed' => $processed,
-            'progress' => $progress,
-            'status' => $status,
-            'message' => ($status === 'finished') ? "Terminé" : "Traitement {$processed} / {$this->total}"
-        ]);
+
+
+
+// 📈 Calculer le pourcentage d’avancement du traitement
+
+$progress = intval(($processed / $this->total) * 100);
+
+
+
+// Déterminer le statut global du job
+
+$status = ($processed >= $this->total) ? 'finished' : 'processing';
+
+
+
+// Définir un message lisible pour l’utilisateur selon le statut
+
+$message = ($status === 'finished')
+
+? " Tous les QR codes ont été générés"
+
+: "Génération du QR code {$processed} / {$this->total}";
+
+
+
+// Mettre à jour les informations de progression dans le cache (utilisées pour la barre de chargement)
+
+Cache::put("job_progress_{$this->jobId}", [
+
+'total' => $this->total, // Nombre total de kiosques à traiter
+
+'processed' => $processed, // Nombre de kiosques déjà traités
+
+'progress' => $progress, // Pourcentage d’avancement
+
+'status' => $status, // Statut actuel : "processing" ou "finished"
+
+'message' => $message // Message d’état pour l’affichage sur la vue
+
+]);
     }
 }
