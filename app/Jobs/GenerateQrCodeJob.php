@@ -8,8 +8,6 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
@@ -18,58 +16,55 @@ class GenerateQrCodeJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    protected $superAgent, $distributeur, $kiosque, $relativePath, $jobId, $total;
+    protected $superAgent, $distributeur, $kiosque, $jobId, $total;
 
-    /**
-     * Create a new job instance.
-     */
-    public function __construct( $superAgent, $distributeur, $kiosque, $relativePath, $jobId, $total)
+    public function __construct($superAgent, $distributeur, $kiosque, $jobId, $total)
     {
         $this->superAgent = $superAgent;
         $this->distributeur = $distributeur;
         $this->kiosque = $kiosque;
-        $this->relativePath  = $relativePath ;
         $this->jobId = $jobId;
         $this->total = $total;
     }
 
-    /**
-     * Execute the job.
-     */
+    // 🛠️ Fonction Helper pour garantir le même nom partout (Vue et Job)
+    private function formatName($name)
+    {
+        $name = preg_replace('/[^\w\-]/', '_', $name);
+        $name = preg_replace('/_+/', '_', $name);
+        return trim($name, '_');
+    }
+
     public function handle(): void
     {
-        //  Journaliser le début du traitement pour ce kiosque
-        Log::info('Génération du QR Code pour le kiosque: ' . $this->kiosque->name);
+        Log::info('Génération QR : ' . $this->kiosque->name);
 
-        //  Définir le chemin absolu vers le dossier où seront enregistrés les QR codes
-        $folderPath = public_path($this->relativePath);
+        // 1. Construire le chemin dossier en utilisant le formatage sécurisé
+        // Cela remplace $relativePath passé par le contrôleur pour être sûr que c'est propre
+        $safeSa = $this->formatName($this->superAgent->name);
+        $safeDist = $this->formatName($this->distributeur->name);
+        
+        $relativePath = "qr_codes/{$safeSa}/{$safeDist}";
+        $folderPath = public_path($relativePath);
 
-        //  Vérifier si le dossier existe, sinon le créer avec les permissions nécessaires
+        // 2. Création du dossier
         if (!File::exists($folderPath)) {
             File::makeDirectory($folderPath, 0755, true, true);
         }
 
-        //  Nettoyer le nom du kiosque pour éviter les caractères spéciaux dans le nom du fichier
-        $safeKiosque = preg_replace('/[^\w\-]/', '_', $this->kiosque->name); // Remplace tout caractère non autorisé par "_"
-        $safeKiosque = preg_replace('/_+/', '_', $safeKiosque); // Évite les doubles underscores
-        $safeKiosque = trim($safeKiosque, '_'); // Supprime les underscores au début/fin du nom
-
-        //  Définir le chemin complet du fichier SVG à générer
+        // 3. Nom du fichier Kiosque
+        $safeKiosque = $this->formatName($this->kiosque->name);
         $qrCodePath = "{$folderPath}/{$safeKiosque}.svg";
 
         try {
-            //  Générer le QR Code au format SVG (format léger et indépendant d’ImageMagick)
             QrCode::format('svg')
-                ->size(300)               // Taille du QR code
-                ->margin(1)               // Petite marge autour
-                ->errorCorrection('H')    // Niveau de correction d’erreur élevé (H = 30%)
-                ->generate($this->kiosque->code, $qrCodePath); // Génère le fichier dans le chemin défini
+                ->size(300)
+                ->margin(1)
+                ->errorCorrection('H')
+                ->generate($this->kiosque->code, $qrCodePath);
 
         } catch (\Exception $e) {
-            //  En cas d’échec de génération SVG, journaliser l’erreur
-            Log::error('Erreur génération QR: ' . $e->getMessage());
-
-            //  Repli (fallback) : générer le QR Code au format PNG avec la librairie GD
+            Log::error('Erreur SVG, tentative PNG : ' . $e->getMessage());
             $qrCodePath = "{$folderPath}/{$safeKiosque}.png";
             QrCode::format('png')
                 ->size(300)
@@ -78,30 +73,17 @@ class GenerateQrCodeJob implements ShouldQueue
                 ->generate($this->kiosque->code, $qrCodePath);
         }
 
-        // 📊 Incrémenter le compteur du nombre de kiosques traités (stocké dans le cache)
+        // 4. Mise à jour Progression (Identique à votre code)
         $processed = Cache::increment("job_progress_{$this->jobId}_count");
-
-        // 📈 Calculer le pourcentage d’avancement du traitement
         $progress = intval(($processed / $this->total) * 100);
-
-        //  Déterminer le statut global du job
         $status = ($processed >= $this->total) ? 'finished' : 'processing';
-
-        // Définir un message lisible pour l’utilisateur selon le statut
-        $message = ($status === 'finished')
-                ? " Tous les QR codes ont été générés"
-                : "Génération du QR code {$processed} / {$this->total}";
-
-        //  Mettre à jour les informations de progression dans le cache (utilisées pour la barre de chargement)
+        
         Cache::put("job_progress_{$this->jobId}", [
-            'total' => $this->total,        // Nombre total de kiosques à traiter
-            'processed' => $processed,      // Nombre de kiosques déjà traités
-            'progress' => $progress,        // Pourcentage d’avancement
-            'status' => $status,            // Statut actuel : "processing" ou "finished"
-            'message' => $message           // Message d’état pour l’affichage sur la vue
+            'total' => $this->total,
+            'processed' => $processed,
+            'progress' => $progress,
+            'status' => $status,
+            'message' => ($status === 'finished') ? "Terminé" : "Traitement {$processed} / {$this->total}"
         ]);
-
-        //  Fin du job pour ce kiosque — à ce stade, la barre de progression peut se mettre à jour automatiquement via AJAX
     }
-
 }
